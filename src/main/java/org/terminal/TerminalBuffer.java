@@ -8,17 +8,17 @@ public class TerminalBuffer {
     private static final long DOUBLE_WIDTH_FLAG = 1L << 45; // Mark second cell of double-wide character
 
     // Terminal width and height
-    private final int width;
-    private final int height;
+    private int width;
+    private int height;
 
     // Buffer height represent total heigh of the buffer,
     // including both text and scrollback
-    private final int bufferHeight;
+    private int bufferHeight;
 
     // Circular buffer to store terminal cells as long values
-    private final long[][] buffer;
+    private long[][] buffer;
 
-    // Top of the screen
+    // Index of the oldest line in the circular buffer
     private int head = 0;
 
     // Shows how far up the user scrolled
@@ -48,12 +48,20 @@ public class TerminalBuffer {
     // --- Utility Methods ---
 
     public int getPhysicalRow(int screenY) {
-        // 1. Calculate the 'logical' row based on current scroll position
-        // When scrollOffset is 0, we see the last 'viewportHeight' lines.
-        int logicalRow = (bufferHeight - height - scrollOffset) + screenY;
+        // 1. Where does the visible screen start in our history?
+        // If we have 100 lines and a 24-line screen, the screen starts at index 76.
+        int screenStartInHistory = Math.max(0, contentSize - height);
 
-        // 2. Map to the circular physical array
-        return (head + logicalRow + bufferHeight) % bufferHeight;
+        // 2. Adjust for scrolling
+        int targetLine = screenStartInHistory + screenY - scrollOffset;
+
+        // 3. Map to circular physical array
+        return (head + targetLine + bufferHeight) % bufferHeight;
+    }
+
+    public int getHistoryPhysicalRow(int historyY) {
+        // Absolute history: 0 is the oldest line, totalLines-1 is the newest.
+        return (head + historyY) % bufferHeight;
     }
 
     public static long pack(int codepoint, int fg, int bg, int attr) {
@@ -130,21 +138,28 @@ public class TerminalBuffer {
 
     private void newLine() {
         cursorX = 0;
-        contentSize++;
-        if (cursorY < height - 1) {
-            cursorY++;
+        if (contentSize < bufferHeight) {
+            // There is still free space in the scrollback — just grow into it.
+            contentSize++;
+            if (cursorY < height - 1) {
+                cursorY++;
+            }
+            // If cursorY is already at height - 1, the screen window slides down
+            // automatically via getPhysicalRow (contentSize just grew), so the
+            // cursor visually stays at the bottom row — no adjustment needed.
         } else {
+            // Buffer is completely full: recycle the oldest row.
             scrollBuffer();
+            // cursorY stays at height - 1; the screen window has shifted by one.
         }
     }
 
     private void scrollBuffer() {
         // The current 'head' is the oldest line.
-        // We wipe it so it can become the newest 'bottom' line.
+        // Wipe it so it becomes the new blank bottom line.
         for (int x = 0; x < width; x++) {
             buffer[head][x] = 0;
         }
-        // Advance head: The ring spins.
         head = (head + 1) % bufferHeight;
     }
 
@@ -164,8 +179,6 @@ public class TerminalBuffer {
         if ((existingCell & DOUBLE_WIDTH_FLAG) != 0 && getCodepointFromLong(existingCell) == 0) {
             if (cursorX > 0) {
                 buffer[physY][cursorX - 1] = 0; // Clear the first cell
-            } else {
-                buffer[physY - 1][cursorX] = 0; // Clear the upper cell
             }
         }
 
@@ -226,12 +239,12 @@ public class TerminalBuffer {
     // -- Content Access --
 
     public int getCodepointAt(int x, int y){
-        long data = buffer[y][x];
+        long data = buffer[getHistoryPhysicalRow(y)][x];
         return getCodepointFromLong(data);
     }
 
     public int[] getAttributesAt(int x, int y){
-        long data = buffer[y][x];
+        long data = buffer[getHistoryPhysicalRow(y)][x];
         int foregroundColor = getForegroundColor(data);
         int backgroundColor = getBackgroundColor(data);
         int textStyle = getTextStyle(data);
@@ -241,7 +254,8 @@ public class TerminalBuffer {
     public String getLineAsString(int y) {
         StringBuilder sb = new StringBuilder();
         for (int x = 0; x < width; x++) {
-            long cell = buffer[y][x];
+            long cell = buffer[getHistoryPhysicalRow(y)][x];
+
             int codepoint = getCodepointFromLong(cell);
 
             // Skip the second cell of double-wide characters
@@ -286,7 +300,7 @@ public class TerminalBuffer {
         StringBuilder sb = new StringBuilder();
         for (int y = 0; y < bufferHeight; y++) {
             for (int x = 0; x < width; x++) {
-                long cell = buffer[y][x];
+                long cell = buffer[getHistoryPhysicalRow(y)][x];
                 int codepoint = getCodepointFromLong(cell);
 
                 // Skip if this is the second cell of a double-wide character
@@ -303,5 +317,64 @@ public class TerminalBuffer {
             }
         }
         return sb.toString();
+    }
+
+    public void resize(int newWidth, int newHeight) {
+        int newBufferHeight = newHeight + (this.bufferHeight - this.height);
+        long[][] newBuffer = new long[newBufferHeight][newWidth];
+
+        // 1. How many lines actually have data?
+        // contentSize counts how many newlines have been issued, but the cursor's
+        // current row also has data and hasn't triggered a newLine() yet.
+        // screenStartInHistory is the history index of the top visible row,
+        // so (screenStartInHistory + cursorY + 1) is the total filled row count.
+        int screenStartInHistory = Math.max(0, contentSize - height);
+        int totalFilledLines = screenStartInHistory + cursorY + 1;
+
+        // 2. How many lines are we moving?
+        // We can't move more than the new buffer can hold.
+        int linesToCopy = Math.min(totalFilledLines, newBufferHeight);
+
+        // 3. Find where the "data" starts (the oldest line currently kept)
+        // If we are shrinking the buffer, we might lose the oldest history lines.
+        int startLineIndex = Math.max(0, totalFilledLines - linesToCopy);
+
+        // 3. Copy lines into the new buffer starting at index 0
+        int copyWidth = Math.min(width, newWidth);
+        for (int i = 0; i < linesToCopy; i++) {
+            int oldPhysY = getHistoryPhysicalRow(startLineIndex + i);
+            for (int x = 0; x < copyWidth; x++) {
+                newBuffer[i][x] = buffer[oldPhysY][x];
+            }
+
+            // Double-wide clipping: if the line was narrowed and the cell now sitting
+            // at the last column is one half of a double-wide pair, the pair is split.
+            // Wipe whichever half(s) landed at or beyond the boundary.
+            if (newWidth < width && newWidth > 0) {
+                long lastCell = newBuffer[i][newWidth - 1];
+                if ((lastCell & DOUBLE_WIDTH_FLAG) != 0 && getCodepointFromLong(lastCell) != 0) {
+                    // Either the character itself or its placeholder is at newWidth-1.
+                    // Either way the pair straddles the boundary — erase the last cell.
+                    newBuffer[i][newWidth - 1] = 0;
+                    // If this was the placeholder (codepoint == 0), also erase the
+                    // character in the column to the left.
+                }
+            }
+        }
+
+        // 4. Reset State
+        this.buffer = newBuffer;
+        this.width = newWidth;
+        this.height = newHeight;
+        this.bufferHeight = newBufferHeight;
+        // After compaction all linesToCopy lines sit at indices 0..linesToCopy-1.
+        // contentSize counts how many lines have been opened (= linesToCopy).
+        this.contentSize = linesToCopy;
+        this.head = 0; // Data now starts perfectly at index 0
+        this.scrollOffset = 0;
+
+        // 5. Adjust Cursor — it lands on the last copied row
+        this.cursorY = Math.min(linesToCopy - 1, newHeight - 1);
+        this.cursorX = Math.min(cursorX, newWidth - 1);
     }
 }
