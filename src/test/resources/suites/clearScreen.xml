@@ -1,0 +1,14 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Clear Screen Suite">
+    <test name="Clear Screen Tests">
+        <groups>
+            <run>
+                <include name="clearScreen"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="org.terminal.TerminalBufferTest"/>
+        </classes>
+    </test>
+</suite>
+

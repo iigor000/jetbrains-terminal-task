@@ -1,0 +1,14 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Cursor Control Suite">
+    <test name="Cursor Control Tests">
+        <groups>
+            <run>
+                <include name="cursorControl"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="org.terminal.TerminalBufferTest"/>
+        </classes>
+    </test>
+</suite>
+

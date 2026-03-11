@@ -1,0 +1,15 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Character Writing Suite">
+    <test name="Character Writing Tests">
+        <groups>
+            <run>
+                <include name="characterWriting"/>
+                <include name="putText"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="org.terminal.TerminalBufferTest"/>
+        </classes>
+    </test>
+</suite>
+

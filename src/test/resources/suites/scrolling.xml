@@ -1,0 +1,14 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Scrolling Suite">
+    <test name="Scrolling Tests">
+        <groups>
+            <run>
+                <include name="scrolling"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="org.terminal.TerminalBufferTest"/>
+        </classes>
+    </test>
+</suite>
+
