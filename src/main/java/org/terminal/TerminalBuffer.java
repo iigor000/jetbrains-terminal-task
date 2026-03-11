@@ -48,8 +48,7 @@ public class TerminalBuffer {
     // --- Utility Methods ---
 
     public int getPhysicalRow(int screenY) {
-        // 1. Where does the visible screen start in our history?
-        // If we have 100 lines and a 24-line screen, the screen starts at index 76.
+        // 1. Get the history index of the top visible row
         int screenStartInHistory = Math.max(0, contentSize - height);
 
         // 2. Adjust for scrolling
@@ -100,9 +99,6 @@ public class TerminalBuffer {
     // --- Buffer Manipulation ---
 
     public void putChar(int codepoint, int fg, int bg, int attr) {
-        // If user is scrolled up, many terminals 'snap' to bottom on new input
-        // scrollOffset = 0;
-
         if (codepoint == '\n') {
             newLine();
             return;
@@ -167,12 +163,6 @@ public class TerminalBuffer {
         text.codePoints().forEach(codepoint -> putChar(codepoint, fg, bg, attr));
     }
 
-    /**
-     * Fills the entire current cursor row with the given codepoint (or blanks when
-     * codepoint == 0).  Double-wide characters are placed in pairs; if the width is
-     * odd, the trailing cell is left blank.  The cursor X is reset to 0 afterwards;
-     * cursorY is not changed.
-     */
     public void fillLine(int codepoint, int fg, int bg, int attr) {
         int physY = getPhysicalRow(cursorY);
         boolean isDouble = codepoint != 0 && isDoubleWide(codepoint);
@@ -218,17 +208,7 @@ public class TerminalBuffer {
         buffer[physY][cursorX] = pack(codepoint, fg, bg, attr);
     }
 
-    /**
-     * Inserts text at the current cursor position on the current line, shifting
-     * existing content to the right.  Content pushed beyond the line width is
-     * discarded (no new lines are created).  The cursor advances by the number of
-     * cells written (double-wide characters consume two cells each).
-     * <p>
-     * A {@code '\n'} inside {@code text} is treated as a literal newline request:
-     * the remainder of the string continues on the next line from column 0, which
-     * is also an insert-at-cursor operation (no overwrite of what was already on
-     * that next line).
-     */
+
     public void insertText(String text, int fg, int bg, int attr) {
         int physY = getPhysicalRow(cursorY);
 
@@ -432,15 +412,14 @@ public class TerminalBuffer {
         int screenStartInHistory = Math.max(0, contentSize - height);
         int totalFilledLines = screenStartInHistory + cursorY + 1;
 
-        // 2. How many lines are we moving?
-        // We can't move more than the new buffer can hold.
+        // 2. We can't move more than the new buffer can hold.
         int linesToCopy = Math.min(totalFilledLines, newBufferHeight);
 
         // 3. Find where the "data" starts (the oldest line currently kept)
         // If we are shrinking the buffer, we might lose the oldest history lines.
         int startLineIndex = Math.max(0, totalFilledLines - linesToCopy);
 
-        // 3. Copy lines into the new buffer starting at index 0
+        // 4. Copy lines into the new buffer starting at index 0
         int copyWidth = Math.min(width, newWidth);
         for (int i = 0; i < linesToCopy; i++) {
             int oldPhysY = getHistoryPhysicalRow(startLineIndex + i);
@@ -463,7 +442,7 @@ public class TerminalBuffer {
             }
         }
 
-        // 4. Reset State
+        // 5. Reset State
         this.buffer = newBuffer;
         this.width = newWidth;
         this.height = newHeight;
@@ -474,7 +453,7 @@ public class TerminalBuffer {
         this.head = 0; // Data now starts perfectly at index 0
         this.scrollOffset = 0;
 
-        // 5. Adjust Cursor — it lands on the last copied row
+        // 6. Adjust Cursor — it lands on the last copied row
         this.cursorY = Math.min(linesToCopy - 1, newHeight - 1);
         this.cursorX = Math.min(cursorX, newWidth - 1);
     }

@@ -11,14 +11,14 @@ public class TerminalBufferTest {
     private static final int TEST_HEIGHT = 24;
     private static final int TEST_SCROLLBACK = 100;
 
-    @BeforeMethod
+    @BeforeMethod(alwaysRun = true)
     public void setUp() {
         buffer = new TerminalBuffer(TEST_WIDTH, TEST_HEIGHT, TEST_SCROLLBACK);
     }
 
     // --- Initialization Tests ---
 
-    @Test
+    @Test(groups = {"initialization"})
     public void testInitializationWithScrollback() {
         assertNotNull(buffer);
         int[] cursor = buffer.getCursorPosition();
@@ -26,7 +26,7 @@ public class TerminalBufferTest {
         assertEquals(cursor[1], 0, "Initial cursor Y should be 0");
     }
 
-    @Test
+    @Test(groups = {"initialization"})
     public void testInitializationWithDefaultScrollback() {
         TerminalBuffer defaultBuffer = new TerminalBuffer(TEST_WIDTH, TEST_HEIGHT);
         assertNotNull(defaultBuffer);
@@ -37,28 +37,28 @@ public class TerminalBufferTest {
 
     // --- Packing/Unpacking Tests ---
 
-    @Test
+    @Test(groups = {"packing"})
     public void testPackUnpackCodepoint() {
         int codepoint = 'A';
         long packed = TerminalBuffer.pack(codepoint, 0, 0, 0);
         assertEquals(TerminalBuffer.getCodepointFromLong(packed), codepoint);
     }
 
-    @Test
+    @Test(groups = {"packing"})
     public void testPackUnpackHighCodepoint() {
         int codepoint = 0x1F600; // 😀 emoji
         long packed = TerminalBuffer.pack(codepoint, 0, 0, 0);
         assertEquals(TerminalBuffer.getCodepointFromLong(packed), codepoint);
     }
 
-    @Test
+    @Test(groups = {"packing"})
     public void testPackUnpackForegroundColor() {
         int fg = 12;
         long packed = TerminalBuffer.pack('A', fg, 0, 0);
         assertEquals(TerminalBuffer.getForegroundColor(packed), fg);
     }
 
-    @Test
+    @Test(groups = {"packing"})
     public void testPackUnpackBackgroundColor() {
         int bg = 155;
         long packed = TerminalBuffer.pack('A', 0, bg, 0);
@@ -72,7 +72,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getTextStyle(packed), style);
     }
 
-    @Test
+    @Test(groups = {"packing"})
     public void testPackUnpackAllAttributes() {
         int codepoint = 'B';
         int fg = 12;
@@ -88,14 +88,14 @@ public class TerminalBufferTest {
 
     // --- Character Writing Tests ---
 
-    @Test
+    @Test(groups = {"characterWriting"})
     public void testPutCharMovesX() {
         buffer.putChar('A', 1, 0, 0);
         int[] cursor = buffer.getCursorPosition();
         assertEquals(cursor[0], 1, "Cursor X should move to 1");
     }
 
-    @Test
+    @Test(groups = {"characterWriting"})
     public void testPutCharStoresCorrectValue() {
         buffer.putChar('X', 1, 5, 3);
         long cell = buffer.getCellAt(0, 0);
@@ -105,7 +105,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getTextStyle(cell), 3);
     }
 
-    @Test
+    @Test(groups = {"characterWriting"})
     public void testPutCharNewlineAtEndOfLine() {
         // Fill a line
         for (int i = 0; i < TEST_WIDTH; i++) {
@@ -117,7 +117,7 @@ public class TerminalBufferTest {
         assertEquals(cursor[1], 1, "Cursor Y should be 1");
     }
 
-    @Test
+    @Test(groups = {"characterWriting"})
     public void testPutCharNewlineCharacter() {
         buffer.putChar('A', 1, 0, 0);
         buffer.putChar('\n', 1, 0, 0);
@@ -127,9 +127,9 @@ public class TerminalBufferTest {
         assertEquals(cursor[1], 1, "Cursor Y should be 1 after newline");
     }
 
-    // --- Insert Text Tests ---
+    // --- Put Text Tests ---
 
-    @Test
+    @Test(groups = {"putText"})
     public void testPutText() {
         buffer.putText("Hello", 1, 0, 0);
         int[] cursor = buffer.getCursorPosition();
@@ -137,7 +137,7 @@ public class TerminalBufferTest {
         assertEquals(cursor[1], 0, "Cursor Y should still be 0");
     }
 
-    @Test
+    @Test(groups = {"putText"})
     public void testPutTextWithMultipleLines() {
         buffer.putText("ABC\nDEF", 1, 0, 0);
         int[] cursor = buffer.getCursorPosition();
@@ -145,16 +145,16 @@ public class TerminalBufferTest {
         assertEquals(cursor[1], 1, "Cursor Y should be 1 after newline");
     }
 
-    @Test
+    @Test(groups = {"putText"})
     public void testPutTextMultipleUTF8Characters() {
         buffer.putText("A😀B", 1, 0, 0);
         int[] cursor = buffer.getCursorPosition();
         assertEquals(cursor[0], 4, "Cursor should advance for each codepoint");
     }
 
-    // --- Character No Movement Tests ---
+    // --- InsertChar Tests ---
 
-    @Test
+    @Test(groups = {"insertChar"})
     public void testInsertChar() {
         buffer.putChar('A', 1, 0, 0);
         buffer.putChar('B', 1, 0, 0);
@@ -164,7 +164,7 @@ public class TerminalBufferTest {
         assertEquals(cursor[0], 2, "Cursor should not move after insertChar");
     }
 
-    @Test
+    @Test(groups = {"insertChar"})
     public void testInsertCharOutOfBounds() {
         buffer.setCursorPosition(TEST_WIDTH + 10, TEST_HEIGHT + 10);
         buffer.insertChar('A', 1, 0, 0);
@@ -177,7 +177,7 @@ public class TerminalBufferTest {
 
     // --- Cursor Control Tests ---
 
-    @Test
+    @Test(groups = {"cursorControl"})
     public void testSetCursorPosition() {
         buffer.setCursorPosition(10, 5);
         int[] cursor = buffer.getCursorPosition();
@@ -185,35 +185,35 @@ public class TerminalBufferTest {
         assertEquals(cursor[1], 5);
     }
 
-    @Test
+    @Test(groups = {"cursorControl"})
     public void testSetCursorPositionClampedX() {
         buffer.setCursorPosition(-5, 5);
         int[] cursor = buffer.getCursorPosition();
         assertEquals(cursor[0], 0);
     }
 
-    @Test
+    @Test(groups = {"cursorControl"})
     public void testSetCursorPositionClampedMaxX() {
         buffer.setCursorPosition(TEST_WIDTH + 100, 5);
         int[] cursor = buffer.getCursorPosition();
         assertEquals(cursor[0], TEST_WIDTH - 1);
     }
 
-    @Test
+    @Test(groups = {"cursorControl"})
     public void testSetCursorPositionClampedY() {
         buffer.setCursorPosition(5, -5);
         int[] cursor = buffer.getCursorPosition();
         assertEquals(cursor[1], 0);
     }
 
-    @Test
+    @Test(groups = {"cursorControl"})
     public void testSetCursorPositionClampedMaxY() {
         buffer.setCursorPosition(5, TEST_HEIGHT + 100);
         int[] cursor = buffer.getCursorPosition();
         assertEquals(cursor[1], TEST_HEIGHT - 1);
     }
 
-    @Test
+    @Test(groups = {"cursorControl"})
     public void testMoveCursor() {
         buffer.setCursorPosition(10, 10);
         buffer.moveCursor(5, 3);
@@ -222,7 +222,7 @@ public class TerminalBufferTest {
         assertEquals(cursor[1], 13);
     }
 
-    @Test
+    @Test(groups = {"cursorControl"})
     public void testMoveCursorNegative() {
         buffer.setCursorPosition(10, 10);
         buffer.moveCursor(-5, -3);
@@ -233,7 +233,7 @@ public class TerminalBufferTest {
 
     // --- Clear Screen Tests ---
 
-    @Test
+    @Test(groups = {"clearScreen"})
     public void testClearScreen() {
         // Fill the screen with content
         for (int y = 0; y < TEST_HEIGHT; y++) {
@@ -246,7 +246,6 @@ public class TerminalBufferTest {
 
         // Verify screen has content before clearing
         String screenBefore = buffer.getScreenAsString();
-        System.out.println("Screen before clear:\n" + screenBefore);
         assertTrue(screenBefore.contains("Text"), "Screen should contain 'Text' before clear");
 
         // Clear should reset cursor and wipe all visible cells
@@ -259,7 +258,6 @@ public class TerminalBufferTest {
 
         // Verify all cells are cleared (no content in getScreenAsString)
         String screenAfter = buffer.getScreenAsString();
-        System.out.println("Screen after clear:\n" + screenAfter);
         assertFalse(screenAfter.contains("Text"), "Screen should not contain 'Text' after clear");
 
         // Verify all visible cells are actually empty by checking no non-zero codepoints exist
@@ -272,7 +270,7 @@ public class TerminalBufferTest {
         }
     }
 
-    @Test
+    @Test(groups = {"clearScreen"})
     public void testClearScreenAndScrollback() {
         // Fill buffer beyond screen height
         for (int i = 0; i < TEST_HEIGHT + TEST_SCROLLBACK - 10; i++) {
@@ -306,7 +304,7 @@ public class TerminalBufferTest {
 
     // --- Scrolling Tests ---
 
-    @Test
+    @Test(groups = {"scrolling"})
     public void testScrollUp() {
         // Fill buffer with content
         for (int i = 0; i < TEST_HEIGHT + 10; i++) {
@@ -319,7 +317,7 @@ public class TerminalBufferTest {
         assertTrue(screen.contains("Line 1\n"), "Should see content after scroll");
     }
 
-    @Test
+    @Test(groups = {"scrolling"})
     public void testScrollDown() {
         for (int i = 0; i < TEST_HEIGHT + 10; i++) {
             buffer.putText("Line " + i, 1, 0, 0);
@@ -330,12 +328,11 @@ public class TerminalBufferTest {
         buffer.scrollDown(5);
         String screen = buffer.getScreenAsString();
         // Verify top and bottom line we should see
-        System.out.println(screen);
         assertTrue(screen.contains("Line 6\n"), "Should see content after scroll");
         assertTrue(screen.contains("Line 29"), "Should see content after scroll");
     }
 
-    @Test
+    @Test(groups = {"scrolling"})
     public void testScrollUpBoundary() {
         for (int i = 0; i < TEST_HEIGHT + 10; i++) {
             buffer.putText("Line " + i, 1, 0, 0);
@@ -344,11 +341,10 @@ public class TerminalBufferTest {
 
         buffer.scrollUp(1000); // Try to scroll up more than available
         String screen = buffer.getScreenAsString();
-        System.out.println(screen);
         assertTrue(screen.contains("Line 1\n"), "Should see content after scroll");
     }
 
-    @Test
+    @Test(groups = {"scrolling"})
     public void testScrollDownBoundary() {
         buffer.scrollDown(100); // Try to scroll down below 0
         // Should clamp to 0
@@ -356,7 +352,7 @@ public class TerminalBufferTest {
 
     // --- Content Access Tests ---
 
-    @Test
+    @Test(groups = {"contentAccess"})
     public void testGetCellAt() {
         buffer.putChar('Z', 1, 5, 2);
         long cell = buffer.getCellAt(0, 0);
@@ -367,7 +363,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getTextStyle(cell), 2);
     }
 
-    @Test
+    @Test(groups = {"contentAccess"})
     public void testGetCellAtMultiLine() {
         buffer.putChar('A', 1, 0, 0);
         buffer.putChar('\n', 1, 0, 0);
@@ -383,14 +379,14 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getBackgroundColor(cellSecondLine), 5);
     }
 
-    @Test
+    @Test(groups = {"contentAccess"})
     public void testGetCodepointAt() {
         buffer.putChar('M', 1, 0, 0);
         int codepoint = buffer.getCodepointAt(0, 0);
         assertEquals(codepoint, 'M');
     }
 
-    @Test
+    @Test(groups = {"contentAccess"})
     public void testGetAttributesAt() {
         buffer.putChar('A', 1, 2, 5);
         int[] attributres  = buffer.getAttributesAt(0, 0);
@@ -399,7 +395,7 @@ public class TerminalBufferTest {
         assertEquals(attributres[2], 5, "Text style");
     }
 
-    @Test
+    @Test(groups = {"contentAccess"})
     public void testGetLineAsString() {
         buffer.putText("TestLine", 1, 0, 0);
         // getLineAsString takes physical row index
@@ -408,7 +404,7 @@ public class TerminalBufferTest {
         assertTrue(line.contains("TestLine"), "getScreenAsString should return a non-null string");
     }
 
-    @Test
+    @Test(groups = {"contentAccess"})
     public void testGetScreenAsString() {
         for (int i = 0; i < TEST_HEIGHT + 10; i++) {
             buffer.putText("Screen" + i, 1, 0, 0);
@@ -421,7 +417,7 @@ public class TerminalBufferTest {
         assertTrue(screen.contains("Screen" + (TEST_HEIGHT + 9)));
     }
 
-    @Test
+    @Test(groups = {"contentAccess"})
     public void testGetFullBufferAsString() {
         // Fill multiple lines
         for (int i = 0; i < TEST_HEIGHT + 10; i++) {
@@ -430,14 +426,13 @@ public class TerminalBufferTest {
         }
 
         String fullBuf = buffer.getFullBufferAsString();
-        System.out.println(fullBuf);
         assertTrue(fullBuf.contains("Buffer0"));
         assertTrue(fullBuf.contains("Buffer" + (TEST_HEIGHT + 9)));
     }
 
     // --- Circular Buffer / Scrollback Tests ---
 
-    @Test
+    @Test(groups = {"circularBuffer"})
     public void testCircularBufferWrapping() {
         // Fill buffer beyond capacity
         for (int i = 0; i < TEST_HEIGHT + TEST_SCROLLBACK + 50; i++) {
@@ -450,7 +445,7 @@ public class TerminalBufferTest {
         assertTrue(screen.contains("X"), "Buffer should still contain data after wraparound");
     }
 
-    @Test
+    @Test(groups = {"circularBuffer"})
     public void testScrollbackPreservesContent() {
         // Add lines to fill scrollback
         for (int i = 0; i < TEST_HEIGHT + 20; i++) {
@@ -467,13 +462,13 @@ public class TerminalBufferTest {
 
     // --- Edge Cases ---
 
-    @Test
+    @Test(groups = {"edgeCases"})
     public void testEmptyBuffer() {
         String screen = buffer.getScreenAsString();
         assertNotNull(screen, "getScreenAsString should return a non-null string for empty buffer");
     }
 
-    @Test
+    @Test(groups = {"edgeCases"})
     public void testMaxCodepointValue() {
         int maxCodepoint = 0x10FFFF; // Max valid Unicode codepoint
         long packed = TerminalBuffer.pack(maxCodepoint, 0, 0, 0);
@@ -481,7 +476,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getCodepointFromLong(packed), maxCodepoint & 0x1FFFFFL);
     }
 
-    @Test
+    @Test(groups = {"edgeCases"})
     public void testMultipleAttributeUpdates() {
         buffer.putChar('A', 10, 20, 1);
         buffer.putChar('B', 30, 40, 2);
@@ -492,7 +487,7 @@ public class TerminalBufferTest {
         assertEquals(buffer.getAttributesAt(2, 0)[0], 50);
     }
 
-    @Test
+    @Test(groups = {"edgeCases"})
     public void testLongTextInsertion() {
         String longText = "A".repeat(1000);
         buffer.putText(longText, 1, 0, 0);
@@ -502,7 +497,7 @@ public class TerminalBufferTest {
         assertTrue(cursor[1] > 0 && cursor[1] < TEST_HEIGHT, "Cursor Y should be within bounds");
     }
 
-    @Test
+    @Test(groups = {"edgeCases"})
     public void testMixedUnicodeCharacters() {
         buffer.putText("Hello世界😀🌍", 1, 0, 0);
         int[] cursor = buffer.getCursorPosition();
@@ -512,7 +507,7 @@ public class TerminalBufferTest {
 
     // --- Resize Tests ---
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeIncreaseWidthAndHeight() {
         // Add content to the buffer
         buffer.putText("Hello", 1, 0, 0);
@@ -529,7 +524,6 @@ public class TerminalBufferTest {
 
         // Verify content is preserved after resize
         String screenAfter = buffer.getFullBufferAsString();
-        System.out.println(screenAfter);
         assertTrue(screenAfter.contains("Hello"), "Content should be preserved after resize");
         assertTrue(screenAfter.contains("World"), "Content should be preserved after resize");
 
@@ -539,7 +533,7 @@ public class TerminalBufferTest {
         assertTrue(cursor[1] >= 0 && cursor[1] < 30, "Cursor Y should be within new bounds");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeDecreaseWidthAndHeight() {
         // Fill buffer with content
         for (int i = 0; i < TEST_HEIGHT; i++) {
@@ -564,7 +558,7 @@ public class TerminalBufferTest {
         assertTrue(cursor[1] >= 0 && cursor[1] < 12, "Cursor Y should be within new bounds");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizePreservesContentOrder() {
         // Add numbered lines
         for (int i = 0; i < TEST_HEIGHT + 1; i++) {
@@ -572,23 +566,19 @@ public class TerminalBufferTest {
             buffer.putChar('\n', 1, 0, 0);
         }
 
-        // Get content before resize
-        String screenBefore = buffer.getScreenAsString();
-        System.out.println(screenBefore);
 
         // Resize to same height but different width
         buffer.resize(90, TEST_HEIGHT);
 
         // Get content after resize
         String screenAfter = buffer.getScreenAsString();
-        System.out.println(screenAfter);
 
         // Verify the order of lines is preserved (check for sequential line numbers)
         assertTrue(screenAfter.contains("Line9"), "Later lines should still appear");
         assertFalse(screenAfter.contains("Line0"), "Earlier lines should have scrolled off");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeReducesScrollback() {
         // Add many lines to exceed buffer
         for (int i = 0; i < TEST_SCROLLBACK + 50; i++) {
@@ -606,7 +596,7 @@ public class TerminalBufferTest {
         assertNotNull(screen, "Screen should not be null after reducing scrollback");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeClampsWidthToOne() {
         buffer.putText("ABC", 1, 0, 0);
 
@@ -618,7 +608,7 @@ public class TerminalBufferTest {
         assertNotNull(screen, "Screen should be readable after resizing to width 1");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeClampsHeightToOne() {
         buffer.putText("ABC", 1, 0, 0);
         buffer.putChar('\n', 1, 0, 0);
@@ -635,7 +625,7 @@ public class TerminalBufferTest {
         assertEquals(cursor[1], 0, "Cursor Y should be clamped to 0");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeWithAttributes() {
         // Add colored text with attributes
         buffer.putChar('A', 10, 20, 1);
@@ -659,7 +649,7 @@ public class TerminalBufferTest {
         assertEquals(attrs1[2], 2, "Text style should be preserved");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeWithDoubleWideCharacters() {
         // Add double-wide character (emoji)
         buffer.putChar('A', 1, 0, 0);
@@ -678,7 +668,7 @@ public class TerminalBufferTest {
         assertTrue(screenAfter.contains("Test"), "Regular text should be preserved");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeResetsCursorToValidPosition() {
         // Set cursor to specific position
         buffer.setCursorPosition(50, 20);
@@ -693,7 +683,7 @@ public class TerminalBufferTest {
         assertTrue(cursor[0] >= 0 && cursor[1] >= 0, "Cursor should have non-negative coordinates");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeResetsScrollOffset() {
         // Add lots of content and scroll up
         for (int i = 0; i < TEST_SCROLLBACK + 50; i++) {
@@ -710,7 +700,7 @@ public class TerminalBufferTest {
         assertNotNull(screen, "Screen should be valid after resize with scroll reset");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizePreservesLineStructure() {
         // Add multiple distinct lines
         buffer.putText("First", 1, 0, 0);
@@ -729,7 +719,7 @@ public class TerminalBufferTest {
         assertTrue(screen.contains("Third"), "Third line should be preserved");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeWithNoContentDoesntCrash() {
         // Empty buffer
         buffer.resize(100, 30);
@@ -739,7 +729,7 @@ public class TerminalBufferTest {
         assertNotNull(screen, "Empty screen should not crash");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeLargeToSmallWidthClipsContent() {
         // Fill a line with text
         String longText = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -754,7 +744,7 @@ public class TerminalBufferTest {
         assertTrue(firstLineLength <= 10, "First line should not exceed new width");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeDoubleWideCharacterPreservedWhenFits() {
         // Write: A 😀 B  at columns 0,1,2(placeholder),3
         buffer.putChar('A', 1, 0, 0);
@@ -775,7 +765,7 @@ public class TerminalBufferTest {
     }
 
     // Placeholder (right half) lands exactly on the last column — both cells wiped
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeDoubleWidePlaceholderAtLastColumn() {
         // 😀 at column 0 (char) and 1 (placeholder), then resize to width 2
         // → placeholder is the last cell, pair straddles nothing yet,
@@ -793,7 +783,7 @@ public class TerminalBufferTest {
     }
 
     // Character (left half) lands exactly on the last column — that cell wiped
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeDoubleWideCharacterAtLastColumn() {
         // Write A then 😀: A at col 0, char-half at col 1, placeholder at col 2
         buffer.putChar('A', 1, 0, 0);
@@ -813,7 +803,7 @@ public class TerminalBufferTest {
                 "Preceding regular character must be unaffected");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizeMaintainsBufferConsistency() {
         // Fill buffer with specific pattern
         for (int i = 0; i < 5; i++) {
@@ -828,11 +818,10 @@ public class TerminalBufferTest {
 
         // Verify buffer is still consistent (no crash and content accessible)
         String screen = buffer.getScreenAsString();
-        System.out.println(screen);
         assertTrue(screen.contains("Pattern"), "Content should survive multiple resizes");
     }
 
-    @Test
+    @Test(groups = {"resize"})
     public void testResizePreservesLastLines() {
         // Add numbered lines to track order
         for (int i = 0; i < 20; i++) {
@@ -853,7 +842,7 @@ public class TerminalBufferTest {
 
     // --- fillLine Tests ---
 
-    @Test
+    @Test(groups = {"fillLines"})
     public void testFillLineWithCharacter() {
         // Row 0 should be filled entirely with 'X'
         buffer.fillLine('X', 1, 2, 3);
@@ -871,7 +860,7 @@ public class TerminalBufferTest {
         }
     }
 
-    @Test
+    @Test(groups = {"fillLines"})
     public void testFillLineWithZeroClearsRow() {
         // First write something to the row
         buffer.putText("Hello", 1, 0, 0);
@@ -886,7 +875,7 @@ public class TerminalBufferTest {
         }
     }
 
-    @Test
+    @Test(groups = {"fillLines"})
     public void testFillLineResetsCursorX() {
         buffer.setCursorPosition(40, 5);
         buffer.fillLine('A', 1, 0, 0);
@@ -895,7 +884,7 @@ public class TerminalBufferTest {
         assertEquals(cursor[1], 5, "fillLine should not change cursorY");
     }
 
-    @Test
+    @Test(groups = {"fillLines"})
     public void testFillLineOnNonZeroRow() {
         // Navigate to row 3 and fill it
         buffer.setCursorPosition(0, 3);
@@ -916,7 +905,7 @@ public class TerminalBufferTest {
         }
     }
 
-    @Test
+    @Test(groups = {"fillLines"})
     public void testFillLineWithDoubleWideCharacter() {
         // Use an emoji (double-wide)
         int emoji = 0x1F600;
@@ -939,7 +928,7 @@ public class TerminalBufferTest {
         }
     }
 
-    @Test
+    @Test(groups = {"fillLines"})
     public void testFillLineWithDoubleWideOddWidth() {
         // Create a buffer with odd width so the last cell can't fit a double-wide pair
         TerminalBuffer oddBuffer = new TerminalBuffer(5, TEST_HEIGHT, TEST_SCROLLBACK);
@@ -959,7 +948,7 @@ public class TerminalBufferTest {
                 "Last cell in odd-width buffer should be blank when using double-wide fill");
     }
 
-    @Test
+    @Test(groups = {"fillLines"})
     public void testFillLineOverwritesExistingContent() {
         // Write mixed content first
         buffer.putText("ABCDE", 1, 0, 0);
@@ -980,7 +969,7 @@ public class TerminalBufferTest {
 
     // --- insertText Tests ---
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextBasic() {
         // Write "XY" first, then insert "AB" at column 0 — "XY" should shift right
         buffer.putText("XY", 1, 0, 0);
@@ -995,7 +984,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(3, 0)), 'Y');
     }
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextAdvancesCursor() {
         buffer.insertText("Hello", 1, 0, 0);
 
@@ -1004,7 +993,7 @@ public class TerminalBufferTest {
         assertEquals(cursor[1], 0, "Cursor Y should remain unchanged");
     }
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextAtMiddleOfLine() {
         // Write "ABCDE" then insert "XY" at column 2
         buffer.putText("ABCDE", 1, 0, 0);
@@ -1022,7 +1011,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(6, 0)), 'E');
     }
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextOverflowIsDiscarded() {
         // Fill the line completely with 'A'
         for (int i = 0; i < TEST_WIDTH; i++) {
@@ -1044,7 +1033,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(2, 0)), 'Z');
     }
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextNewlineMovesToNextLineAndContinuesInserting() {
         buffer.putText("ABC", 1, 0, 0);  // row 0: A B C ...
         buffer.putText("\nDEF", 1, 0, 0); // row 1: D E F ...
@@ -1066,7 +1055,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(3, 1)), 'F', "Col 3 row 1 should be F (shifted right)");
     }
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextPreservesAttributes() {
         buffer.insertText("Hi", 7, 13, 3);
 
@@ -1081,7 +1070,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getTextStyle(cell1),       3);
     }
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextEmptyStringDoesNothing() {
         buffer.putText("ABC", 1, 0, 0);
         buffer.setCursorPosition(0, 0);
@@ -1095,7 +1084,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(0, 0)), 'A');
     }
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextDoubleWideCharacterShiftsCorrectly() {
         // Place "AB" then insert an emoji before them
         buffer.putText("AB", 1, 0, 0);
@@ -1120,7 +1109,7 @@ public class TerminalBufferTest {
                 "'B' should have shifted to col 3");
     }
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextDoubleWideAtEndOfLineIsSkipped() {
         // Position cursor at the last column — a double-wide can't fit (needs 2 cells)
         buffer.setCursorPosition(TEST_WIDTH - 1, 0);
@@ -1136,7 +1125,7 @@ public class TerminalBufferTest {
                 "Last cell should remain empty when emoji was skipped");
     }
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextOnEmptyLine() {
         buffer.insertText("Hello", 1, 0, 0);
 
@@ -1148,7 +1137,7 @@ public class TerminalBufferTest {
         assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(4, 0)), 'o');
     }
 
-    @Test
+    @Test(groups = {"insertText"})
     public void testInsertTextAtEndOfLineAppends() {
         buffer.putText("Hello", 1, 0, 0);
         // cursor is now at col 5
