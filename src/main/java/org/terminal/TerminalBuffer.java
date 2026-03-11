@@ -167,6 +167,39 @@ public class TerminalBuffer {
         text.codePoints().forEach(codepoint -> putChar(codepoint, fg, bg, attr));
     }
 
+    /**
+     * Fills the entire current cursor row with the given codepoint (or blanks when
+     * codepoint == 0).  Double-wide characters are placed in pairs; if the width is
+     * odd, the trailing cell is left blank.  The cursor X is reset to 0 afterwards;
+     * cursorY is not changed.
+     */
+    public void fillLine(int codepoint, int fg, int bg, int attr) {
+        int physY = getPhysicalRow(cursorY);
+        boolean isDouble = codepoint != 0 && isDoubleWide(codepoint);
+
+        int x = 0;
+        while (x < width) {
+            if (codepoint == 0) {
+                buffer[physY][x] = 0;
+                x++;
+            } else if (isDouble) {
+                if (x + 1 < width) {
+                    buffer[physY][x]     = pack(codepoint, fg, bg, attr) | DOUBLE_WIDTH_FLAG;
+                    buffer[physY][x + 1] = pack(0, fg, bg, attr) | DOUBLE_WIDTH_FLAG;
+                    x += 2;
+                } else {
+                    // Last cell can't fit a double-wide pair — leave it blank
+                    buffer[physY][x] = 0;
+                    x++;
+                }
+            } else {
+                buffer[physY][x] = pack(codepoint, fg, bg, attr);
+                x++;
+            }
+        }
+        cursorX = 0;
+    }
+
     public void insertChar(int codepoint, int fg, int bg, int attr) {
         if (cursorX >= width || cursorY >= height) {
             return; // Out of bounds
@@ -183,6 +216,74 @@ public class TerminalBuffer {
         }
 
         buffer[physY][cursorX] = pack(codepoint, fg, bg, attr);
+    }
+
+    /**
+     * Inserts text at the current cursor position on the current line, shifting
+     * existing content to the right.  Content pushed beyond the line width is
+     * discarded (no new lines are created).  The cursor advances by the number of
+     * cells written (double-wide characters consume two cells each).
+     * <p>
+     * A {@code '\n'} inside {@code text} is treated as a literal newline request:
+     * the remainder of the string continues on the next line from column 0, which
+     * is also an insert-at-cursor operation (no overwrite of what was already on
+     * that next line).
+     */
+    public void insertText(String text, int fg, int bg, int attr) {
+        int physY = getPhysicalRow(cursorY);
+
+        // Resolve any split double-wide character at the insertion point before we
+        // start shifting: if the cursor sits on the placeholder half, clear both halves.
+        if (cursorX < width) {
+            long cell = buffer[physY][cursorX];
+            if ((cell & DOUBLE_WIDTH_FLAG) != 0 && getCodepointFromLong(cell) == 0 && cursorX > 0) {
+                buffer[physY][cursorX - 1] = 0;
+                buffer[physY][cursorX]     = 0;
+            }
+        }
+
+        int[] codepoints = text.codePoints().toArray();
+        for (int i = 0; i < codepoints.length; i++) {
+            int cp = codepoints[i];
+
+            if (cp == '\n') {
+                // Move to the next line and continue inserting there
+                newLine();
+                physY = getPhysicalRow(cursorY);
+                continue;
+            }
+
+            if (cursorX >= width) {
+                // No more room on this line — skip the rest of the line's characters
+                // until we hit a newline
+                continue;
+            }
+
+            boolean isDouble = isDoubleWide(cp);
+            int cellsNeeded = isDouble ? 2 : 1;
+
+            // If a double-wide would straddle the line boundary, skip it
+            if (isDouble && cursorX + 1 >= width) {
+                continue;
+            }
+
+            // Shift existing cells to the right to make room
+            int shiftFrom = width - cellsNeeded - 1;
+            for (int x = shiftFrom; x >= cursorX; x--) {
+                buffer[physY][x + cellsNeeded] = buffer[physY][x];
+            }
+
+            // Write the character
+            long cellValue = pack(cp, fg, bg, attr);
+            if (isDouble) {
+                buffer[physY][cursorX]     = cellValue | DOUBLE_WIDTH_FLAG;
+                buffer[physY][cursorX + 1] = pack(0, fg, bg, attr) | DOUBLE_WIDTH_FLAG;
+                cursorX += 2;
+            } else {
+                buffer[physY][cursorX] = cellValue;
+                cursorX++;
+            }
+        }
     }
 
     public void clearScreen() {

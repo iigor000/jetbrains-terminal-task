@@ -850,5 +850,313 @@ public class TerminalBufferTest {
         // The last lines should still be visible
         assertTrue(screenAfter.contains("Line19"), "Most recent content should be preserved");
     }
+
+    // --- fillLine Tests ---
+
+    @Test
+    public void testFillLineWithCharacter() {
+        // Row 0 should be filled entirely with 'X'
+        buffer.fillLine('X', 1, 2, 3);
+
+        for (int x = 0; x < TEST_WIDTH; x++) {
+            long cell = buffer.getCellAt(x, 0);
+            assertEquals(TerminalBuffer.getCodepointFromLong(cell), 'X',
+                    "Every cell in row 0 should be 'X'");
+            assertEquals(TerminalBuffer.getForegroundColor(cell), 1,
+                    "Foreground color should be preserved");
+            assertEquals(TerminalBuffer.getBackgroundColor(cell), 2,
+                    "Background color should be preserved");
+            assertEquals(TerminalBuffer.getTextStyle(cell), 3,
+                    "Text style should be preserved");
+        }
+    }
+
+    @Test
+    public void testFillLineWithZeroClearsRow() {
+        // First write something to the row
+        buffer.putText("Hello", 1, 0, 0);
+
+        // Now clear the row using fillLine(0,...)
+        buffer.fillLine(0, 0, 0, 0);
+
+        for (int x = 0; x < TEST_WIDTH; x++) {
+            long cell = buffer.getCellAt(x, 0);
+            assertEquals(TerminalBuffer.getCodepointFromLong(cell), 0,
+                    "Every cell in row 0 should be empty after fillLine(0,...)");
+        }
+    }
+
+    @Test
+    public void testFillLineResetsCursorX() {
+        buffer.setCursorPosition(40, 5);
+        buffer.fillLine('A', 1, 0, 0);
+        int[] cursor = buffer.getCursorPosition();
+        assertEquals(cursor[0], 0, "fillLine should reset cursorX to 0");
+        assertEquals(cursor[1], 5, "fillLine should not change cursorY");
+    }
+
+    @Test
+    public void testFillLineOnNonZeroRow() {
+        // Navigate to row 3 and fill it
+        buffer.setCursorPosition(0, 3);
+        buffer.fillLine('Z', 5, 6, 7);
+
+        // Row 3 should be all 'Z'
+        for (int x = 0; x < TEST_WIDTH; x++) {
+            long cell = buffer.getCellAt(x, 3);
+            assertEquals(TerminalBuffer.getCodepointFromLong(cell), 'Z',
+                    "Every cell in row 3 should be 'Z'");
+        }
+
+        // Row 0 should still be empty
+        for (int x = 0; x < TEST_WIDTH; x++) {
+            long cell = buffer.getCellAt(x, 0);
+            assertEquals(TerminalBuffer.getCodepointFromLong(cell), 0,
+                    "Row 0 should be untouched");
+        }
+    }
+
+    @Test
+    public void testFillLineWithDoubleWideCharacter() {
+        // Use an emoji (double-wide)
+        int emoji = 0x1F600;
+        buffer.fillLine(emoji, 1, 0, 0);
+
+        // With even width (80), all cells should be filled in pairs
+        for (int x = 0; x < TEST_WIDTH; x += 2) {
+            long charCell = buffer.getCellAt(x, 0);
+            long placeholderCell = buffer.getCellAt(x + 1, 0);
+
+            assertEquals(TerminalBuffer.getCodepointFromLong(charCell), emoji,
+                    "Left cell of pair at col " + x + " should hold the emoji");
+            assertTrue((charCell & (1L << 45)) != 0,
+                    "Left cell should have DOUBLE_WIDTH_FLAG set");
+
+            assertEquals(TerminalBuffer.getCodepointFromLong(placeholderCell), 0,
+                    "Right (placeholder) cell at col " + (x + 1) + " should have codepoint 0");
+            assertTrue((placeholderCell & (1L << 45)) != 0,
+                    "Right cell should have DOUBLE_WIDTH_FLAG set");
+        }
+    }
+
+    @Test
+    public void testFillLineWithDoubleWideOddWidth() {
+        // Create a buffer with odd width so the last cell can't fit a double-wide pair
+        TerminalBuffer oddBuffer = new TerminalBuffer(5, TEST_HEIGHT, TEST_SCROLLBACK);
+        int emoji = 0x1F600;
+        oddBuffer.fillLine(emoji, 1, 0, 0);
+
+        // Columns 0-3 should be two complete pairs
+        for (int x = 0; x < 4; x += 2) {
+            long charCell = oddBuffer.getCellAt(x, 0);
+            assertEquals(TerminalBuffer.getCodepointFromLong(charCell), emoji,
+                    "Left cell at col " + x + " should hold the emoji");
+        }
+
+        // Column 4 (last, odd) cannot hold a double-wide pair — must be blank
+        long lastCell = oddBuffer.getCellAt(4, 0);
+        assertEquals(TerminalBuffer.getCodepointFromLong(lastCell), 0,
+                "Last cell in odd-width buffer should be blank when using double-wide fill");
+    }
+
+    @Test
+    public void testFillLineOverwritesExistingContent() {
+        // Write mixed content first
+        buffer.putText("ABCDE", 1, 0, 0);
+        buffer.setCursorPosition(0, 0);
+
+        // Fill the same row with a different character
+        buffer.fillLine('*', 2, 3, 4);
+
+        for (int x = 0; x < TEST_WIDTH; x++) {
+            long cell = buffer.getCellAt(x, 0);
+            assertEquals(TerminalBuffer.getCodepointFromLong(cell), '*',
+                    "fillLine should overwrite existing content at col " + x);
+            assertEquals(TerminalBuffer.getForegroundColor(cell), 2);
+            assertEquals(TerminalBuffer.getBackgroundColor(cell), 3);
+            assertEquals(TerminalBuffer.getTextStyle(cell), 4);
+        }
+    }
+
+    // --- insertText Tests ---
+
+    @Test
+    public void testInsertTextBasic() {
+        // Write "XY" first, then insert "AB" at column 0 — "XY" should shift right
+        buffer.putText("XY", 1, 0, 0);
+        buffer.setCursorPosition(0, 0);
+
+        buffer.insertText("AB", 1, 0, 0);
+
+        // Result should be: A B X Y ...
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(0, 0)), 'A');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(1, 0)), 'B');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(2, 0)), 'X');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(3, 0)), 'Y');
+    }
+
+    @Test
+    public void testInsertTextAdvancesCursor() {
+        buffer.insertText("Hello", 1, 0, 0);
+
+        int[] cursor = buffer.getCursorPosition();
+        assertEquals(cursor[0], 5, "Cursor X should advance by the number of inserted characters");
+        assertEquals(cursor[1], 0, "Cursor Y should remain unchanged");
+    }
+
+    @Test
+    public void testInsertTextAtMiddleOfLine() {
+        // Write "ABCDE" then insert "XY" at column 2
+        buffer.putText("ABCDE", 1, 0, 0);
+        buffer.setCursorPosition(2, 0);
+
+        buffer.insertText("XY", 1, 0, 0);
+
+        // Result: A B X Y C D E
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(0, 0)), 'A');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(1, 0)), 'B');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(2, 0)), 'X');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(3, 0)), 'Y');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(4, 0)), 'C');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(5, 0)), 'D');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(6, 0)), 'E');
+    }
+
+    @Test
+    public void testInsertTextOverflowIsDiscarded() {
+        // Fill the line completely with 'A'
+        for (int i = 0; i < TEST_WIDTH; i++) {
+            buffer.insertChar('A', 1, 0, 0);
+            buffer.moveCursor(1, 0);
+        }
+        buffer.setCursorPosition(0, 0);
+
+        // Inserting more characters should push 'A's off the right edge — no new line
+        buffer.insertText("XYZ", 1, 0, 0);
+
+        // Only one row should still be in use (no line wrapping occurred)
+        int[] cursor = buffer.getCursorPosition();
+        assertEquals(cursor[1], 0, "insertText must not create new lines when content overflows");
+
+        // First three cells should be the inserted characters
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(0, 0)), 'X');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(1, 0)), 'Y');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(2, 0)), 'Z');
+    }
+
+    @Test
+    public void testInsertTextNewlineMovesToNextLineAndContinuesInserting() {
+        buffer.putText("ABC", 1, 0, 0);  // row 0: A B C ...
+        buffer.putText("\nDEF", 1, 0, 0); // row 1: D E F ...
+        // Go back to row 0 col 1 and insert "X\nY".
+        buffer.setCursorPosition(1, 0);
+
+        buffer.insertText("X\nY", 1, 0, 0);
+
+        // Row 0: A X B C  (X inserted before B, existing content shifted right)
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(0, 0)), 'A', "Col 0 row 0");
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(1, 0)), 'X', "Col 1 row 0 should be X");
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(2, 0)), 'B', "Col 2 row 0 should be B");
+
+        // '\n' advances to row 1 col 0 (newLine() does not skip existing rows).
+        // 'Y' is then inserted at row 1 col 0, shifting D E F one cell to the right.
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(0, 1)), 'Y', "Col 0 row 1 should be Y");
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(1, 1)), 'D', "Col 1 row 1 should be D (shifted right)");
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(2, 1)), 'E', "Col 2 row 1 should be E (shifted right)");
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(3, 1)), 'F', "Col 3 row 1 should be F (shifted right)");
+    }
+
+    @Test
+    public void testInsertTextPreservesAttributes() {
+        buffer.insertText("Hi", 7, 13, 3);
+
+        long cell0 = buffer.getCellAt(0, 0);
+        assertEquals(TerminalBuffer.getForegroundColor(cell0), 7,  "Foreground should be preserved");
+        assertEquals(TerminalBuffer.getBackgroundColor(cell0), 13, "Background should be preserved");
+        assertEquals(TerminalBuffer.getTextStyle(cell0),       3,  "Style should be preserved");
+
+        long cell1 = buffer.getCellAt(1, 0);
+        assertEquals(TerminalBuffer.getForegroundColor(cell1), 7);
+        assertEquals(TerminalBuffer.getBackgroundColor(cell1), 13);
+        assertEquals(TerminalBuffer.getTextStyle(cell1),       3);
+    }
+
+    @Test
+    public void testInsertTextEmptyStringDoesNothing() {
+        buffer.putText("ABC", 1, 0, 0);
+        buffer.setCursorPosition(0, 0);
+
+        buffer.insertText("", 1, 0, 0);
+
+        // Buffer and cursor should be unchanged
+        int[] cursor = buffer.getCursorPosition();
+        assertEquals(cursor[0], 0, "Cursor X should not move for empty insertText");
+        assertEquals(cursor[1], 0, "Cursor Y should not move for empty insertText");
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(0, 0)), 'A');
+    }
+
+    @Test
+    public void testInsertTextDoubleWideCharacterShiftsCorrectly() {
+        // Place "AB" then insert an emoji before them
+        buffer.putText("AB", 1, 0, 0);
+        buffer.setCursorPosition(0, 0);
+
+        int emoji = 0x1F600;
+        buffer.insertText(new String(Character.toChars(emoji)), 1, 0, 0);
+
+        // emoji occupies cols 0 (char) and 1 (placeholder); A shifts to col 2, B to col 3
+        long emojiCell = buffer.getCellAt(0, 0);
+        long placeholder = buffer.getCellAt(1, 0);
+        assertEquals(TerminalBuffer.getCodepointFromLong(emojiCell), emoji,
+                "Emoji character cell should be at col 0");
+        assertTrue((emojiCell & (1L << 45)) != 0, "Emoji cell should have DOUBLE_WIDTH_FLAG");
+        assertEquals(TerminalBuffer.getCodepointFromLong(placeholder), 0,
+                "Placeholder cell should have codepoint 0");
+        assertTrue((placeholder & (1L << 45)) != 0, "Placeholder should have DOUBLE_WIDTH_FLAG");
+
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(2, 0)), 'A',
+                "'A' should have shifted to col 2");
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(3, 0)), 'B',
+                "'B' should have shifted to col 3");
+    }
+
+    @Test
+    public void testInsertTextDoubleWideAtEndOfLineIsSkipped() {
+        // Position cursor at the last column — a double-wide can't fit (needs 2 cells)
+        buffer.setCursorPosition(TEST_WIDTH - 1, 0);
+
+        int emoji = 0x1F600;
+        buffer.insertText(new String(Character.toChars(emoji)), 1, 0, 0);
+
+        // Emoji must be skipped; cursor must not move
+        int[] cursor = buffer.getCursorPosition();
+        assertEquals(cursor[0], TEST_WIDTH - 1,
+                "Cursor should not advance when double-wide can't fit");
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(TEST_WIDTH - 1, 0)), 0,
+                "Last cell should remain empty when emoji was skipped");
+    }
+
+    @Test
+    public void testInsertTextOnEmptyLine() {
+        buffer.insertText("Hello", 1, 0, 0);
+
+        // Same result as putText on an empty line
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(0, 0)), 'H');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(1, 0)), 'e');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(2, 0)), 'l');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(3, 0)), 'l');
+        assertEquals(TerminalBuffer.getCodepointFromLong(buffer.getCellAt(4, 0)), 'o');
+    }
+
+    @Test
+    public void testInsertTextAtEndOfLineAppends() {
+        buffer.putText("Hello", 1, 0, 0);
+        // cursor is now at col 5
+
+        buffer.insertText(" World", 1, 0, 0);
+
+        String screen = buffer.getScreenAsString();
+        assertTrue(screen.contains("Hello World"), "Text appended at end should read correctly");
+    }
 }
 
